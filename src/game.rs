@@ -62,6 +62,12 @@ impl SnakeHead {
             },
         }
     }
+
+    fn move_to(&mut self, new_head_pos: GridPos) -> GridPos {
+        let old_head_pos = std::mem::replace(&mut self.pos, new_head_pos);
+        self.mesh.transform.translation = self.pos.as_rect_translation();
+        old_head_pos
+    }
 }
 
 #[derive(Component)]
@@ -106,6 +112,7 @@ impl Collider {
 pub struct Scene {
     self_entity: Entity,
     snake_head: Entity,
+    snake_body_parts: Vec<GridPos>,
     colliders: HashMap<GridPos, Entity>,
 }
 
@@ -136,31 +143,28 @@ impl Scene {
 }
 
 pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
-    let snake_head = commands
-        .spawn(SnakeHead::new(GridPos::new(0, 0), &assets))
-        .id();
+    let mut snake_head = SnakeHead::new(GridPos::new(0, 0), &assets);
+    let snake_head_id = commands.spawn_empty().id();
     let scene_id = commands.spawn_empty().id();
 
     let mut scene = Scene {
         self_entity: scene_id,
-        snake_head,
+        snake_head: snake_head_id,
+        snake_body_parts: Vec::new(),
         colliders: HashMap::new(),
     };
 
     let arena_len = 10;
     let arena_corners = (-arena_len, arena_len, arena_len, -arena_len);
     let mut walls = Vec::new();
-
     for x in arena_corners.0..=arena_corners.2 {
         walls.push((x, arena_corners.3));
         walls.push((x, arena_corners.1));
     }
-
     for y in (arena_corners.3 + 1)..arena_corners.1 {
         walls.push((arena_corners.0, y));
         walls.push((arena_corners.2, y));
     }
-
     for (x, y) in walls {
         scene.push_collider(
             &mut commands,
@@ -168,6 +172,20 @@ pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
         );
     }
 
+    for _ in 0..3 {
+        let new_head_pos = snake_head.orientation.next(&snake_head.pos);
+        if scene.colliders.contains_key(&new_head_pos) {
+            panic!("Collision");
+        }
+        let old_head_pos = snake_head.move_to(new_head_pos);
+        scene.push_collider(
+            &mut commands,
+            Collider::from_variant(ColliderVariant::SnakeBody, old_head_pos, &assets),
+        );
+        scene.snake_body_parts.push(old_head_pos);
+    }
+
+    commands.entity(snake_head_id).insert(snake_head);
     commands
         .entity(scene_id)
         .insert(SceneBundle {
@@ -178,5 +196,5 @@ pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
             inherited_visibility: Default::default(),
             view_visibility: Default::default(),
         })
-        .add_child(snake_head);
+        .add_child(snake_head_id);
 }
