@@ -35,3 +35,22 @@ struct Collider {
     pos: GridPos,
     mesh: MaterialMesh2dBundle<ColorMaterial>,
 }
+
+
+#[derive(Component)]
+pub struct Scene {
+    self_entity: Entity,
+    snake_head: Entity,
+    colliders: HashMap<GridPos, Entity>,
+}
+
+#[derive(Bundle)]
+struct SceneBundle {
+    scene: Scene,
+
+    transform: Transform,
+    global_transform: GlobalTransform,
+    visibility: Visibility,
+    inherited_visibility: InheritedVisibility,
+    view_visibility: ViewVisibility,
+}
