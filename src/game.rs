@@ -205,11 +205,38 @@ impl Collider {
 }
 
 #[derive(Component)]
+pub struct Apple;
+
+#[derive(Bundle)]
+pub struct AppleBundle {
+    marker: Apple,
+    pos: GridPos,
+    mesh: MaterialMesh2dBundle<ColorMaterial>,
+}
+
+impl AppleBundle {
+    fn new(pos: GridPos, assets: &GlobalAssets) -> Self {
+        let (mesh, material) = assets.apple_mesh_material.clone();
+        Self {
+            marker: Apple,
+            pos,
+            mesh: MaterialMesh2dBundle {
+                mesh,
+                material,
+                transform: Transform::from_translation(pos.as_rect_translation()),
+                ..default()
+            },
+        }
+    }
+}
+
+#[derive(Component)]
 pub struct Scene {
     self_entity: Entity,
     pub snake_head: Entity,
     snake_body_parts: Vec<GridPos>,
     colliders: HashMap<GridPos, Entity>,
+    apple: Entity,
 }
 
 #[derive(Bundle)]
@@ -235,27 +262,34 @@ impl Scene {
 }
 
 pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
-    let mut snake_head = SnakeHeadBundle::new(GridPos::new(0, 0), &assets);
     let snake_head_id = commands.spawn_empty().id();
-    let scene_id = commands.spawn_empty().id();
+    let mut snake_head = SnakeHeadBundle::new(GridPos::new(0, 0), &assets);
 
+    let apple_id = commands.spawn_empty().id();
+    let apple = AppleBundle::new(GridPos::new(0, 0), &assets);
+
+    let scene_id = commands.spawn_empty().id();
     let mut scene = Scene {
         self_entity: scene_id,
         snake_head: snake_head_id,
         snake_body_parts: Vec::new(),
         colliders: HashMap::new(),
+        apple: apple_id,
     };
 
     let arena_len = 10;
-    let arena_corners = (-arena_len, arena_len, arena_len, -arena_len);
+    let arena_y_max = arena_len;
+    let arena_y_min = -arena_len;
+    let arena_x_max = arena_len;
+    let arena_x_min = -arena_len;
     let mut walls = Vec::new();
-    for x in arena_corners.0..=arena_corners.2 {
-        walls.push((x, arena_corners.3));
-        walls.push((x, arena_corners.1));
+    for x in arena_x_min - 1..=arena_x_max + 1 {
+        walls.push((x, arena_y_min - 1));
+        walls.push((x, arena_y_max + 1));
     }
-    for y in (arena_corners.3 + 1)..arena_corners.1 {
-        walls.push((arena_corners.0, y));
-        walls.push((arena_corners.2, y));
+    for y in (arena_y_min - 1 + 1)..arena_y_max + 1 {
+        walls.push((arena_x_min - 1, y));
+        walls.push((arena_x_max + 1, y));
     }
     for (x, y) in walls {
         scene.push_collider(
@@ -278,6 +312,7 @@ pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
     }
 
     commands.entity(snake_head_id).insert(snake_head);
+    commands.entity(apple_id).insert(apple);
     commands
         .entity(scene_id)
         .insert(SceneBundle {
@@ -288,5 +323,6 @@ pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
             inherited_visibility: Default::default(),
             view_visibility: Default::default(),
         })
-        .add_child(snake_head_id);
+        .add_child(snake_head_id)
+        .add_child(apple_id);
 }

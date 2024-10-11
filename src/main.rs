@@ -80,7 +80,7 @@ fn update(
                 &mut scene,
                 pressed_orientation,
             )
-            .unwrap();
+            .expect("Collided");
         }
     }
 }
