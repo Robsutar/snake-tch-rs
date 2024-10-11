@@ -9,7 +9,7 @@ use bevy::{
 };
 
 #[derive(Component, Debug, Eq, PartialEq, Hash, Clone, Copy)]
-struct GridPos {
+pub struct GridPos {
     x: i32,
     y: i32,
 }
@@ -24,7 +24,7 @@ impl GridPos {
 }
 
 #[derive(Component)]
-enum SnakeOrientation {
+pub enum SnakeOrientation {
     Up,
     Down,
     Left,
@@ -35,20 +35,33 @@ impl SnakeOrientation {
         match &self {
             SnakeOrientation::Up => GridPos::new(pos.x, pos.y + 1),
             SnakeOrientation::Down => GridPos::new(pos.x, pos.y - 1),
-            SnakeOrientation::Left => GridPos::new(pos.x + 1, pos.y),
-            SnakeOrientation::Right => GridPos::new(pos.x - 1, pos.y),
+            SnakeOrientation::Left => GridPos::new(pos.x - 1, pos.y),
+            SnakeOrientation::Right => GridPos::new(pos.x + 1, pos.y),
+        }
+    }
+    pub fn pressed(keyboard_input: &Res<ButtonInput<KeyCode>>) -> Option<Self> {
+        if keyboard_input.just_pressed(KeyCode::ArrowUp) {
+            Some(Self::Up)
+        } else if keyboard_input.just_pressed(KeyCode::ArrowDown) {
+            Some(Self::Down)
+        } else if keyboard_input.just_pressed(KeyCode::ArrowLeft) {
+            Some(Self::Left)
+        } else if keyboard_input.just_pressed(KeyCode::ArrowRight) {
+            Some(Self::Right)
+        } else {
+            None
         }
     }
 }
 
 #[derive(Bundle)]
-struct SnakeHead {
+pub struct SnakeHeadBundle {
     orientation: SnakeOrientation,
     pos: GridPos,
     mesh: MaterialMesh2dBundle<ColorMaterial>,
 }
 
-impl SnakeHead {
+impl SnakeHeadBundle {
     fn new(pos: GridPos, assets: &GlobalAssets) -> Self {
         let (mesh, material) = assets.snake_head_mesh_material.clone();
         Self {
@@ -63,25 +76,61 @@ impl SnakeHead {
         }
     }
 
-    pub(self) fn apply_translation_to(&mut self, new_head_pos: GridPos) -> GridPos {
-        let old_head_pos = std::mem::replace(&mut self.pos, new_head_pos);
-        self.mesh.transform.translation = self.pos.as_rect_translation();
+    pub(self) fn apply_translation_to(
+        self_pos: &mut GridPos,
+        self_transform: &mut Transform,
+        new_head_pos: GridPos,
+    ) -> GridPos {
+        let old_head_pos = std::mem::replace(self_pos, new_head_pos);
+        self_transform.translation = self_pos.as_rect_translation();
         old_head_pos
     }
 
+    pub fn move_to(
+        self_orientation: &mut SnakeOrientation,
+        self_pos: &mut GridPos,
+        self_transform: &mut Transform,
+        collider_query: &mut Query<&mut Transform, With<ColliderVariant>>,
+        scene: &mut Scene,
+        orientation: SnakeOrientation,
+    ) -> Result<(), GridPos> {
+        let new_head_pos = orientation.next(&self_pos);
+        if scene.colliders.contains_key(&new_head_pos) {
+            return Err(new_head_pos);
+        }
+        *self_orientation = orientation;
+        let old_head_pos =
+            SnakeHeadBundle::apply_translation_to(self_pos, self_transform, new_head_pos);
+
+        let last_body_part_id = scene
+            .colliders
+            .remove(&scene.snake_body_parts.remove(0))
+            .unwrap();
+        let mut last_body_part = collider_query.get_mut(last_body_part_id).unwrap();
+
+        last_body_part.translation = old_head_pos.as_rect_translation();
+
+        scene.colliders.insert(old_head_pos, last_body_part_id);
+        scene.snake_body_parts.push(old_head_pos);
+        Ok(())
+    }
+
     fn increase_to(
-        &mut self,
+        self_orientation: &mut SnakeOrientation,
+        self_pos: &mut GridPos,
+        self_transform: &mut Transform,
         commands: &mut Commands,
         assets: &GlobalAssets,
         scene: &mut Scene,
         orientation: SnakeOrientation,
     ) -> Result<(), GridPos> {
-        let new_head_pos = orientation.next(&self.pos);
+        let new_head_pos = orientation.next(&self_pos);
         if scene.colliders.contains_key(&new_head_pos) {
             return Err(new_head_pos);
         }
-        self.orientation = orientation;
-        let old_head_pos = self.apply_translation_to(new_head_pos);
+        *self_orientation = orientation;
+        let old_head_pos =
+            SnakeHeadBundle::apply_translation_to(self_pos, self_transform, new_head_pos);
         scene.push_collider(
             commands,
             Collider::from_variant(ColliderVariant::SnakeBody, old_head_pos, &assets),
@@ -92,7 +141,7 @@ impl SnakeHead {
 }
 
 #[derive(Component)]
-enum ColliderVariant {
+pub enum ColliderVariant {
     Apple,
     Wall,
     SnakeBody,
@@ -132,7 +181,7 @@ impl Collider {
 #[derive(Component)]
 pub struct Scene {
     self_entity: Entity,
-    snake_head: Entity,
+    pub snake_head: Entity,
     snake_body_parts: Vec<GridPos>,
     colliders: HashMap<GridPos, Entity>,
 }
@@ -164,7 +213,7 @@ impl Scene {
 }
 
 pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
-    let mut snake_head = SnakeHead::new(GridPos::new(0, 0), &assets);
+    let mut snake_head = SnakeHeadBundle::new(GridPos::new(0, 0), &assets);
     let snake_head_id = commands.spawn_empty().id();
     let scene_id = commands.spawn_empty().id();
 
@@ -194,9 +243,16 @@ pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
     }
 
     for _ in 0..3 {
-        snake_head
-            .increase_to(&mut commands, &assets, &mut scene, SnakeOrientation::Up)
-            .unwrap();
+        SnakeHeadBundle::increase_to(
+            &mut snake_head.orientation,
+            &mut snake_head.pos,
+            &mut snake_head.mesh.transform,
+            &mut commands,
+            &assets,
+            &mut scene,
+            SnakeOrientation::Up,
+        )
+        .unwrap();
     }
 
     commands.entity(snake_head_id).insert(snake_head);

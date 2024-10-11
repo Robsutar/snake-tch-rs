@@ -2,6 +2,7 @@ mod game;
 
 use bevy::{prelude::*, sprite::Mesh2dHandle};
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
+use game::{ColliderVariant, GridPos, Scene, SnakeHeadBundle, SnakeOrientation};
 
 pub const RECT_SIZE: f32 = 25.0;
 
@@ -51,8 +52,33 @@ fn init(
     commands.spawn(Camera2dBundle::default());
 }
 
-fn update(mut contexts: EguiContexts) {
+fn update(
+    mut contexts: EguiContexts,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut scene_query: Query<&mut Scene>,
+    mut snake_head_query: Query<
+        (&mut SnakeOrientation, &mut GridPos, &mut Transform),
+        Without<ColliderVariant>,
+    >,
+    mut collider_query: Query<&mut Transform, With<ColliderVariant>>,
+) {
     egui::Window::new("Hello").show(contexts.ctx_mut(), |ui| {
         ui.label("world");
     });
+
+    if let Some(pressed_orientation) = SnakeOrientation::pressed(&keyboard_input) {
+        let mut scene = scene_query.single_mut();
+        let (mut orientation, mut pos, mut transform) =
+            snake_head_query.get_mut(scene.snake_head).unwrap();
+
+        SnakeHeadBundle::move_to(
+            &mut orientation,
+            &mut pos,
+            &mut transform,
+            &mut collider_query,
+            &mut scene,
+            pressed_orientation,
+        )
+        .unwrap();
+    }
 }
