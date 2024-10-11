@@ -18,6 +18,10 @@ impl GridPos {
     fn new(x: i32, y: i32) -> Self {
         Self { x, y }
     }
+    fn as_rect_translation(&self) -> Vec3 {
+        Vec3::new(RECT_SIZE * self.x as f32, RECT_SIZE * self.y as f32, 0.0)
+    }
+}
 }
 
 #[derive(Bundle)]
@@ -34,11 +38,7 @@ impl SnakeHead {
             mesh: MaterialMesh2dBundle {
                 mesh,
                 material,
-                transform: Transform::from_xyz(
-                    RECT_SIZE * pos.x as f32,
-                    RECT_SIZE * pos.y as f32,
-                    0.0,
-                ),
+                transform: Transform::from_translation(pos.as_rect_translation()),
                 ..default()
             },
         }
@@ -76,11 +76,7 @@ impl Collider {
             mesh: MaterialMesh2dBundle {
                 mesh,
                 material,
-                transform: Transform::from_xyz(
-                    RECT_SIZE * pos.x as f32,
-                    RECT_SIZE * pos.y as f32,
-                    0.0,
-                ),
+                transform: Transform::from_translation(pos.as_rect_translation()),
                 ..default()
             },
         }
