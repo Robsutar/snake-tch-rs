@@ -68,6 +68,27 @@ impl SnakeHead {
         self.mesh.transform.translation = self.pos.as_rect_translation();
         old_head_pos
     }
+
+    fn increase_to(
+        &mut self,
+        commands: &mut Commands,
+        assets: &GlobalAssets,
+        scene: &mut Scene,
+        orientation: SnakeOrientation,
+    ) -> Result<(), GridPos> {
+        let new_head_pos = orientation.next(&self.pos);
+        if scene.colliders.contains_key(&new_head_pos) {
+            return Err(new_head_pos);
+        }
+        self.orientation = orientation;
+        let old_head_pos = self.move_to(new_head_pos);
+        scene.push_collider(
+            commands,
+            Collider::from_variant(ColliderVariant::SnakeBody, old_head_pos, &assets),
+        );
+        scene.snake_body_parts.push(old_head_pos);
+        Ok(())
+    }
 }
 
 #[derive(Component)]
@@ -173,16 +194,9 @@ pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
     }
 
     for _ in 0..3 {
-        let new_head_pos = snake_head.orientation.next(&snake_head.pos);
-        if scene.colliders.contains_key(&new_head_pos) {
-            panic!("Collision");
-        }
-        let old_head_pos = snake_head.move_to(new_head_pos);
-        scene.push_collider(
-            &mut commands,
-            Collider::from_variant(ColliderVariant::SnakeBody, old_head_pos, &assets),
-        );
-        scene.snake_body_parts.push(old_head_pos);
+        snake_head
+            .increase_to(&mut commands, &assets, &mut scene, SnakeOrientation::Up)
+            .unwrap();
     }
 
     commands.entity(snake_head_id).insert(snake_head);
