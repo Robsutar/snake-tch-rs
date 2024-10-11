@@ -23,7 +23,7 @@ impl GridPos {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, PartialEq, Eq)]
 pub enum SnakeOrientation {
     Up,
     Down,
@@ -39,6 +39,7 @@ impl SnakeOrientation {
             SnakeOrientation::Right => GridPos::new(pos.x + 1, pos.y),
         }
     }
+
     pub fn pressed(keyboard_input: &Res<ButtonInput<KeyCode>>) -> Option<Self> {
         if keyboard_input.just_pressed(KeyCode::ArrowUp) {
             Some(Self::Up)
@@ -50,6 +51,33 @@ impl SnakeOrientation {
             Some(Self::Right)
         } else {
             None
+        }
+    }
+
+    pub fn opposite(&self) -> Self {
+        match self {
+            Self::Up => Self::Down,
+            Self::Down => Self::Up,
+            Self::Left => Self::Right,
+            Self::Right => Self::Left,
+        }
+    }
+
+    pub fn left(&self) -> Self {
+        match self {
+            Self::Up => Self::Left,
+            Self::Down => Self::Right,
+            Self::Left => Self::Down,
+            Self::Right => Self::Up,
+        }
+    }
+
+    pub fn right(&self) -> Self {
+        match self {
+            Self::Up => Self::Right,
+            Self::Down => Self::Left,
+            Self::Left => Self::Up,
+            Self::Right => Self::Down,
         }
     }
 }
@@ -196,10 +224,6 @@ struct SceneBundle {
 }
 
 impl Scene {
-    fn get_collider(&mut self, pos: &GridPos) -> Option<&Entity> {
-        self.colliders.get(&pos)
-    }
-
     fn push_collider(&mut self, commands: &mut Commands, collider: Collider) {
         let pos = collider.pos.clone();
         let collider_id = commands.spawn(collider).id();

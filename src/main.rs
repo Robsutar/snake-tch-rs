@@ -71,14 +71,16 @@ fn update(
         let (mut orientation, mut pos, mut transform) =
             snake_head_query.get_mut(scene.snake_head).unwrap();
 
-        SnakeHeadBundle::move_to(
-            &mut orientation,
-            &mut pos,
-            &mut transform,
-            &mut collider_query,
-            &mut scene,
-            pressed_orientation,
-        )
-        .unwrap();
+        if pressed_orientation.opposite() != *orientation {
+            SnakeHeadBundle::move_to(
+                &mut orientation,
+                &mut pos,
+                &mut transform,
+                &mut collider_query,
+                &mut scene,
+                pressed_orientation,
+            )
+            .unwrap();
+        }
     }
 }
