@@ -104,3 +104,19 @@ struct SceneBundle {
     inherited_visibility: InheritedVisibility,
     view_visibility: ViewVisibility,
 }
+
+impl Scene {
+    fn get_collider(&mut self, pos: &GridPos) -> Option<&Entity> {
+        self.colliders.get(&pos)
+    }
+
+    fn push_collider(&mut self, commands: &mut Commands, collider: Collider) {
+        let pos = collider.pos.clone();
+        let collider_id = commands.spawn(collider).id();
+        if let Some(replaced) = self.colliders.insert(pos, collider_id) {
+            panic!("Collider override. Replaced: {:?}", replaced)
+        }
+        commands.entity(self.self_entity).add_child(collider_id);
+    }
+}
+
