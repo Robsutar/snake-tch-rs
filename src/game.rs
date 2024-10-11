@@ -238,7 +238,7 @@ pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
     for (x, y) in walls {
         scene.push_collider(
             &mut commands,
-            Collider::from_variant(ColliderVariant::Apple, GridPos::new(x, y), &assets),
+            Collider::from_variant(ColliderVariant::Wall, GridPos::new(x, y), &assets),
         );
     }
 
