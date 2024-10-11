@@ -63,7 +63,7 @@ impl SnakeHead {
         }
     }
 
-    fn move_to(&mut self, new_head_pos: GridPos) -> GridPos {
+    pub(self) fn apply_translation_to(&mut self, new_head_pos: GridPos) -> GridPos {
         let old_head_pos = std::mem::replace(&mut self.pos, new_head_pos);
         self.mesh.transform.translation = self.pos.as_rect_translation();
         old_head_pos
@@ -81,7 +81,7 @@ impl SnakeHead {
             return Err(new_head_pos);
         }
         self.orientation = orientation;
-        let old_head_pos = self.move_to(new_head_pos);
+        let old_head_pos = self.apply_translation_to(new_head_pos);
         scene.push_collider(
             commands,
             Collider::from_variant(ColliderVariant::SnakeBody, old_head_pos, &assets),
