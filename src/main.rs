@@ -1,17 +1,54 @@
 mod game;
+
+use bevy::{prelude::*, sprite::Mesh2dHandle};
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
+
+pub const RECT_SIZE: f32 = 25.0;
+
+#[derive(Resource)]
+pub struct GlobalAssets {
+    apple_mesh_material: (Mesh2dHandle, Handle<ColorMaterial>),
+    wall_mesh_material: (Mesh2dHandle, Handle<ColorMaterial>),
+    snake_body_mesh_material: (Mesh2dHandle, Handle<ColorMaterial>),
+    snake_head_mesh_material: (Mesh2dHandle, Handle<ColorMaterial>),
+}
 
 fn main() {
     App::default()
         .add_plugins(DefaultPlugins)
         .add_plugins(EguiPlugin)
-        .add_systems(Startup, init)
+        .add_systems(Startup, (init, game::init_scene).chain())
         .add_systems(Update, update)
         .run();
 }
 
-fn init(mut commands: Commands) {
-    commands.spawn(Camera2d);
+fn init(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    let generic_rect = Rectangle::new(RECT_SIZE * 0.8, RECT_SIZE * 0.8);
+
+    commands.insert_resource(GlobalAssets {
+        apple_mesh_material: (
+            Mesh2dHandle(meshes.add(generic_rect)),
+            materials.add(Color::srgb(1.0, 0.0, 1.0)),
+        ),
+        wall_mesh_material: (
+            Mesh2dHandle(meshes.add(generic_rect)),
+            materials.add(Color::srgb(0.0, 0.0, 1.0)),
+        ),
+        snake_body_mesh_material: (
+            Mesh2dHandle(meshes.add(generic_rect)),
+            materials.add(Color::srgb(0.0, 1.0, 1.0)),
+        ),
+        snake_head_mesh_material: (
+            Mesh2dHandle(meshes.add(generic_rect)),
+            materials.add(Color::srgb(0.0, 1.0, 0.0)),
+        ),
+    });
+
+    commands.spawn(Camera2dBundle::default());
 }
 
 fn update(mut contexts: EguiContexts) {
