@@ -2,7 +2,7 @@ mod game;
 
 use bevy::{prelude::*, sprite::Mesh2dHandle};
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
-use game::{ColliderVariant, GridPos, Scene, SnakeHeadBundle, SnakeOrientation};
+use game::{Apple, ColliderVariant, GridPos, Scene, SnakeHeadBundle, SnakeOrientation};
 
 pub const RECT_SIZE: f32 = 25.0;
 
@@ -12,6 +12,7 @@ pub struct GlobalAssets {
     wall_mesh_material: (Mesh2dHandle, Handle<ColorMaterial>),
     snake_body_mesh_material: (Mesh2dHandle, Handle<ColorMaterial>),
     snake_head_mesh_material: (Mesh2dHandle, Handle<ColorMaterial>),
+    arena: IRect,
 }
 
 fn main() {
@@ -30,10 +31,11 @@ fn init(
 ) {
     let generic_rect = Rectangle::new(RECT_SIZE * 0.8, RECT_SIZE * 0.8);
 
+    let arena_len = 10;
     commands.insert_resource(GlobalAssets {
         apple_mesh_material: (
             Mesh2dHandle(meshes.add(generic_rect)),
-            materials.add(Color::srgb(1.0, 0.0, 1.0)),
+            materials.add(Color::srgb(1.0, 0.0, 0.0)),
         ),
         wall_mesh_material: (
             Mesh2dHandle(meshes.add(generic_rect)),
@@ -47,6 +49,7 @@ fn init(
             Mesh2dHandle(meshes.add(generic_rect)),
             materials.add(Color::srgb(0.0, 1.0, 0.0)),
         ),
+        arena: IRect::new(-arena_len, -arena_len, arena_len, arena_len),
     });
 
     commands.spawn(Camera2dBundle::default());
@@ -55,10 +58,19 @@ fn init(
 fn update(
     mut contexts: EguiContexts,
     keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut commands: Commands,
+    assets: Res<GlobalAssets>,
     mut scene_query: Query<&mut Scene>,
     mut snake_head_query: Query<
         (&mut SnakeOrientation, &mut GridPos, &mut Transform),
-        Without<ColliderVariant>,
+        (Without<ColliderVariant>, Without<Apple>),
+    >,
+    mut apple_query: Query<
+        (&mut GridPos, &mut Transform),
+        (
+            With<Apple>,
+            (Without<ColliderVariant>, Without<SnakeOrientation>),
+        ),
     >,
     mut collider_query: Query<&mut Transform, With<ColliderVariant>>,
 ) {
@@ -68,14 +80,19 @@ fn update(
 
     if let Some(pressed_orientation) = SnakeOrientation::pressed(&keyboard_input) {
         let mut scene = scene_query.single_mut();
-        let (mut orientation, mut pos, mut transform) =
+        let (mut snake_orientation, mut snake_pos, mut snake_transform) =
             snake_head_query.get_mut(scene.snake_head).unwrap();
+        let (mut apple_pos, mut apple_transform) = apple_query.get_mut(scene.apple).unwrap();
 
-        if pressed_orientation.opposite() != *orientation {
+        if pressed_orientation.opposite() != *snake_orientation {
             SnakeHeadBundle::move_to(
-                &mut orientation,
-                &mut pos,
-                &mut transform,
+                &mut snake_orientation,
+                &mut snake_pos,
+                &mut snake_transform,
+                &mut apple_pos,
+                &mut apple_transform,
+                &mut commands,
+                &assets,
                 &mut collider_query,
                 &mut scene,
                 pressed_orientation,
