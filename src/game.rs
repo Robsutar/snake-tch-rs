@@ -142,7 +142,6 @@ impl SnakeHeadBundle {
 
 #[derive(Component)]
 pub enum ColliderVariant {
-    Apple,
     Wall,
     SnakeBody,
 }
@@ -157,7 +156,6 @@ struct Collider {
 impl Collider {
     fn from_variant(variant: ColliderVariant, pos: GridPos, assets: &GlobalAssets) -> Self {
         let ((mesh, material), variant) = match &variant {
-            ColliderVariant::Apple => (assets.apple_mesh_material.clone(), ColliderVariant::Apple),
             ColliderVariant::Wall => (assets.wall_mesh_material.clone(), ColliderVariant::Wall),
             ColliderVariant::SnakeBody => (
                 assets.snake_body_mesh_material.clone(),
