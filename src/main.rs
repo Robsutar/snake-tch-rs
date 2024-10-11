@@ -1,3 +1,4 @@
+mod agent;
 mod game;
 
 use bevy::{prelude::*, sprite::Mesh2dHandle};
