@@ -120,3 +120,48 @@ impl Scene {
     }
 }
 
+pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
+    let snake_head = commands
+        .spawn(SnakeHead::new(GridPos::new(0, 0), &assets))
+        .id();
+    let scene_id = commands.spawn_empty().id();
+
+    let mut scene = Scene {
+        self_entity: scene_id,
+        snake_head,
+        colliders: HashMap::new(),
+    };
+
+    let arena_len = 10;
+    let arena_corners = (-arena_len, arena_len, arena_len, -arena_len);
+    let mut walls = Vec::new();
+
+    for x in arena_corners.0..=arena_corners.2 {
+        walls.push((x, arena_corners.3));
+        walls.push((x, arena_corners.1));
+    }
+
+    for y in (arena_corners.3 + 1)..arena_corners.1 {
+        walls.push((arena_corners.0, y));
+        walls.push((arena_corners.2, y));
+    }
+
+    for (x, y) in walls {
+        scene.push_collider(
+            &mut commands,
+            Collider::from_variant(ColliderVariant::Apple, GridPos::new(x, y), &assets),
+        );
+    }
+
+    commands
+        .entity(scene_id)
+        .insert(SceneBundle {
+            scene,
+            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+            global_transform: Default::default(),
+            visibility: Default::default(),
+            inherited_visibility: Default::default(),
+            view_visibility: Default::default(),
+        })
+        .add_child(snake_head);
+}
