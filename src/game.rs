@@ -22,10 +22,28 @@ impl GridPos {
         Vec3::new(RECT_SIZE * self.x as f32, RECT_SIZE * self.y as f32, 0.0)
     }
 }
+
+#[derive(Component)]
+enum SnakeOrientation {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+impl SnakeOrientation {
+    fn next(&self, pos: &GridPos) -> GridPos {
+        match &self {
+            SnakeOrientation::Up => GridPos::new(pos.x, pos.y + 1),
+            SnakeOrientation::Down => GridPos::new(pos.x, pos.y - 1),
+            SnakeOrientation::Left => GridPos::new(pos.x + 1, pos.y),
+            SnakeOrientation::Right => GridPos::new(pos.x - 1, pos.y),
+        }
+    }
 }
 
 #[derive(Bundle)]
 struct SnakeHead {
+    orientation: SnakeOrientation,
     pos: GridPos,
     mesh: MaterialMesh2dBundle<ColorMaterial>,
 }
@@ -34,6 +52,7 @@ impl SnakeHead {
     fn new(pos: GridPos, assets: &GlobalAssets) -> Self {
         let (mesh, material) = assets.snake_head_mesh_material.clone();
         Self {
+            orientation: SnakeOrientation::Up,
             pos,
             mesh: MaterialMesh2dBundle {
                 mesh,
