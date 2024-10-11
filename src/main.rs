@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+mod game;
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 
 fn main() {
