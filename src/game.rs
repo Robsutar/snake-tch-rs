@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::RECT_SIZE;
+use crate::{MaterialMesh, RECT_SIZE};
 
 use super::GlobalAssets;
 use bevy::{
@@ -9,14 +9,14 @@ use bevy::{
 };
 use rand::{thread_rng, Rng};
 
-#[derive(Component, Debug, Eq, PartialEq, Hash, Clone, Copy)]
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
 pub struct GridPos {
-    x: i32,
-    y: i32,
+    pub x: i32,
+    pub y: i32,
 }
 
 impl GridPos {
-    fn new(x: i32, y: i32) -> Self {
+    pub fn new(x: i32, y: i32) -> Self {
         Self { x, y }
     }
     fn as_rect_translation(&self) -> Vec3 {
@@ -24,7 +24,39 @@ impl GridPos {
     }
 }
 
-#[derive(Component, PartialEq, Eq)]
+pub struct GridEntity {
+    pub id: Entity,
+    pub pos: GridPos,
+}
+impl GridEntity {
+    fn new(id: Entity, pos: GridPos) -> Self {
+        Self { id, pos }
+    }
+    fn create_raw_bundle(
+        pos: &GridPos,
+        mesh_material: &MaterialMesh,
+    ) -> MaterialMesh2dBundle<ColorMaterial> {
+        let (mesh, material) = mesh_material.clone();
+        MaterialMesh2dBundle {
+            mesh,
+            material,
+            transform: Transform::from_translation(pos.as_rect_translation()),
+            ..default()
+        }
+    }
+
+    fn apply_translation_to(
+        self_pos: &mut GridPos,
+        self_transform: &mut Transform,
+        new_pos: GridPos,
+    ) -> GridPos {
+        let old_head_pos = std::mem::replace(self_pos, new_pos);
+        self_transform.translation = self_pos.as_rect_translation();
+        old_head_pos
+    }
+}
+
+#[derive(PartialEq, Eq)]
 pub enum SnakeOrientation {
     Up,
     Down,
@@ -83,53 +115,39 @@ impl SnakeOrientation {
     }
 }
 
-#[derive(Bundle)]
-pub struct SnakeHeadBundle {
-    orientation: SnakeOrientation,
-    pos: GridPos,
-    mesh: MaterialMesh2dBundle<ColorMaterial>,
+#[derive(Component)]
+pub struct SnakeHeadMarker;
+impl SnakeHeadMarker {
+    fn create_bundle(assets: &GlobalAssets, pos: &GridPos) -> impl Bundle {
+        (
+            SnakeHeadMarker,
+            GridEntity::create_raw_bundle(&pos, &assets.snake_head_mesh_material),
+        )
+    }
 }
 
-impl SnakeHeadBundle {
-    fn new(pos: GridPos, assets: &GlobalAssets) -> Self {
-        let (mesh, material) = assets.snake_head_mesh_material.clone();
-        Self {
-            orientation: SnakeOrientation::Up,
-            pos,
-            mesh: MaterialMesh2dBundle {
-                mesh,
-                material,
-                transform: Transform::from_translation(pos.as_rect_translation()),
-                ..default()
-            },
-        }
-    }
+pub struct SnakeHead {
+    pub orientation: SnakeOrientation,
+    pub ge: GridEntity,
+}
 
+impl SnakeHead {
     pub fn move_to(
-        self_orientation: &mut SnakeOrientation,
-        self_pos: &mut GridPos,
         self_transform: &mut Transform,
-        apple_pos: &mut GridPos,
         apple_transform: &mut Transform,
         commands: &mut Commands,
         assets: &GlobalAssets,
-        collider_query: &mut Query<&mut Transform, With<ColliderVariant>>,
+        collider_query: &mut Query<&mut Transform, With<ColliderMarker>>,
         scene: &mut Scene,
         orientation: SnakeOrientation,
     ) -> Result<(), GridPos> {
-        let new_head_pos = orientation.next(&self_pos);
+        let new_head_pos = orientation.next(&scene.snake_head.ge.pos);
         if scene.colliders.contains_key(&new_head_pos) {
             return Err(new_head_pos);
-        } else if *apple_pos == new_head_pos {
-            SnakeHeadBundle::increase_to_unchecked(
-                self_orientation,
-                self_pos,
-                self_transform,
-                commands,
-                assets,
-                scene,
-                orientation,
-            );
+        } else if scene.apple.ge.pos == new_head_pos {
+            Self::increase_to_unchecked(self_transform, commands, assets, scene, orientation);
+
+            let apple_pos = &mut scene.apple.ge.pos;
 
             let mut rng = thread_rng();
 
@@ -140,17 +158,20 @@ impl SnakeHeadBundle {
                     rng.gen_range(assets.arena.min.y..=assets.arena.max.y),
                 );
             }
-            apply_translation_to(apple_pos, apple_transform, new_apple_pos);
+            GridEntity::apply_translation_to(apple_pos, apple_transform, new_apple_pos);
             Ok(())
         } else {
-            *self_orientation = orientation;
-            let old_head_pos = apply_translation_to(self_pos, self_transform, new_head_pos);
+            let self_pos = &mut scene.snake_head.ge.pos;
+            scene.snake_head.orientation = orientation;
+
+            let old_head_pos =
+                GridEntity::apply_translation_to(self_pos, self_transform, new_head_pos);
 
             let last_body_part_id = scene
                 .colliders
                 .remove(&scene.snake_body_parts.remove(0))
                 .unwrap();
-            let mut last_body_part = collider_query.get_mut(last_body_part_id).unwrap();
+            let mut last_body_part = collider_query.get_mut(last_body_part_id.ge.id).unwrap();
 
             last_body_part.translation = old_head_pos.as_rect_translation();
 
@@ -161,94 +182,79 @@ impl SnakeHeadBundle {
     }
 
     fn increase_to_unchecked(
-        self_orientation: &mut SnakeOrientation,
-        self_pos: &mut GridPos,
         self_transform: &mut Transform,
         commands: &mut Commands,
         assets: &GlobalAssets,
         scene: &mut Scene,
         orientation: SnakeOrientation,
     ) {
-        let new_head_pos = orientation.next(&self_pos);
-        *self_orientation = orientation;
-        let old_head_pos = apply_translation_to(self_pos, self_transform, new_head_pos);
-        scene.push_collider(
-            commands,
-            Collider::from_variant(ColliderVariant::SnakeBody, old_head_pos, &assets),
+        let new_head_pos = orientation.next(&scene.snake_head.ge.pos);
+        scene.snake_head.orientation = orientation;
+        let old_head_pos = GridEntity::apply_translation_to(
+            &mut scene.snake_head.ge.pos,
+            self_transform,
+            new_head_pos,
         );
+        scene.push_collider(commands, &assets, ColliderVariant::SnakeBody, old_head_pos);
         scene.snake_body_parts.push(old_head_pos);
     }
 }
 
 #[derive(Component)]
-pub struct Apple;
-
-#[derive(Bundle)]
-pub struct AppleBundle {
-    marker: Apple,
-    pos: GridPos,
-    mesh: MaterialMesh2dBundle<ColorMaterial>,
+pub struct AppleMarker;
+impl AppleMarker {
+    fn create_bundle(assets: &GlobalAssets, pos: &GridPos) -> impl Bundle {
+        (
+            AppleMarker,
+            GridEntity::create_raw_bundle(&pos, &assets.apple_mesh_material),
+        )
+    }
 }
 
-impl AppleBundle {
-    fn new(pos: GridPos, assets: &GlobalAssets) -> Self {
-        let (mesh, material) = assets.apple_mesh_material.clone();
-        Self {
-            marker: Apple,
-            pos,
-            mesh: MaterialMesh2dBundle {
-                mesh,
-                material,
-                transform: Transform::from_translation(pos.as_rect_translation()),
-                ..default()
-            },
+pub struct Apple {
+    pub ge: GridEntity,
+}
+
+pub enum ColliderVariant {
+    Wall,
+    SnakeBody,
+}
+impl ColliderVariant {
+    fn mesh_material<'a>(&self, assets: &'a GlobalAssets) -> &'a MaterialMesh {
+        match &self {
+            ColliderVariant::Wall => &assets.wall_mesh_material,
+            ColliderVariant::SnakeBody => &assets.snake_body_mesh_material,
         }
     }
 }
 
 #[derive(Component)]
-pub enum ColliderVariant {
-    Wall,
-    SnakeBody,
+pub struct ColliderMarker;
+impl ColliderMarker {
+    fn create_bundle(
+        variant: &ColliderVariant,
+        assets: &GlobalAssets,
+        pos: &GridPos,
+    ) -> impl Bundle {
+        (
+            ColliderMarker,
+            GridEntity::create_raw_bundle(&pos, &variant.mesh_material(&assets)),
+        )
+    }
 }
 
-#[derive(Bundle)]
 struct Collider {
     variant: ColliderVariant,
-    pos: GridPos,
-    mesh: MaterialMesh2dBundle<ColorMaterial>,
-}
-
-impl Collider {
-    fn from_variant(variant: ColliderVariant, pos: GridPos, assets: &GlobalAssets) -> Self {
-        let ((mesh, material), variant) = match &variant {
-            ColliderVariant::Wall => (assets.wall_mesh_material.clone(), ColliderVariant::Wall),
-            ColliderVariant::SnakeBody => (
-                assets.snake_body_mesh_material.clone(),
-                ColliderVariant::SnakeBody,
-            ),
-        };
-
-        Self {
-            variant,
-            pos,
-            mesh: MaterialMesh2dBundle {
-                mesh,
-                material,
-                transform: Transform::from_translation(pos.as_rect_translation()),
-                ..default()
-            },
-        }
-    }
+    pub ge: GridEntity,
 }
 
 #[derive(Component)]
 pub struct Scene {
     self_entity: Entity,
-    pub snake_head: Entity,
-    pub apple: Entity,
+    pub snake_head: SnakeHead,
     snake_body_parts: Vec<GridPos>,
-    colliders: HashMap<GridPos, Entity>,
+    pub apple: Apple,
+    colliders: HashMap<GridPos, Collider>,
 }
 
 #[derive(Bundle)]
@@ -263,46 +269,58 @@ struct SceneBundle {
 }
 
 impl Scene {
-    fn push_collider(&mut self, commands: &mut Commands, collider: Collider) {
-        let pos = collider.pos.clone();
-        let collider_id = commands.spawn(collider).id();
-        if let Some(replaced) = self.colliders.insert(pos, collider_id) {
-            panic!("Collider override. Replaced: {:?}", replaced)
+    fn push_collider(
+        &mut self,
+        commands: &mut Commands,
+        assets: &GlobalAssets,
+        variant: ColliderVariant,
+        pos: GridPos,
+    ) {
+        let collider_id = commands
+            .spawn(ColliderMarker::create_bundle(&variant, &assets, &pos))
+            .id();
+        if let Some(replaced) = self.colliders.insert(
+            pos,
+            Collider {
+                variant,
+                ge: GridEntity::new(collider_id, pos),
+            },
+        ) {
+            panic!("Collider override. Replaced: {:?}", replaced.ge.pos)
         }
         commands.entity(self.self_entity).add_child(collider_id);
     }
-}
 
-fn apply_translation_to(
-    self_pos: &mut GridPos,
-    self_transform: &mut Transform,
-    new_pos: GridPos,
-) -> GridPos {
-    let old_head_pos = std::mem::replace(self_pos, new_pos);
-    self_transform.translation = self_pos.as_rect_translation();
-    old_head_pos
+    pub fn is_collision(&self, pos: &GridPos) -> bool {
+        self.colliders.contains_key(pos)
+    }
 }
 
 pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
     let mut rng = thread_rng();
 
     let snake_head_id = commands.spawn_empty().id();
-    let mut snake_head = SnakeHeadBundle::new(GridPos::new(0, 0), &assets);
+    let snake_head = SnakeHead {
+        orientation: SnakeOrientation::Up,
+        ge: GridEntity::new(snake_head_id, GridPos::new(0, 0)),
+    };
 
     let apple_id = commands.spawn_empty().id();
-    let apple = AppleBundle::new(
-        GridPos::new(
-            rng.gen_range(assets.arena.min.x..=assets.arena.max.x),
-            rng.gen_range(assets.arena.min.y..=assets.arena.max.y),
+    let apple = Apple {
+        ge: GridEntity::new(
+            apple_id,
+            GridPos::new(
+                rng.gen_range(assets.arena.min.x..=assets.arena.max.x),
+                rng.gen_range(assets.arena.min.y..=assets.arena.max.y),
+            ),
         ),
-        &assets,
-    );
+    };
 
     let scene_id = commands.spawn_empty().id();
     let mut scene = Scene {
         self_entity: scene_id,
-        snake_head: snake_head_id,
-        apple: apple_id,
+        snake_head,
+        apple,
         snake_body_parts: Vec::new(),
         colliders: HashMap::new(),
     };
@@ -319,24 +337,34 @@ pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
     for (x, y) in walls {
         scene.push_collider(
             &mut commands,
-            Collider::from_variant(ColliderVariant::Wall, GridPos::new(x, y), &assets),
+            &assets,
+            ColliderVariant::Wall,
+            GridPos::new(x, y),
         );
     }
 
     for _ in 0..3 {
-        SnakeHeadBundle::increase_to_unchecked(
-            &mut snake_head.orientation,
-            &mut snake_head.pos,
-            &mut snake_head.mesh.transform,
+        let snake_head = &mut scene.snake_head;
+        let new_head_pos = snake_head.orientation.next(&snake_head.ge.pos);
+        let old_head_pos = std::mem::replace(&mut snake_head.ge.pos, new_head_pos);
+        scene.push_collider(
             &mut commands,
             &assets,
-            &mut scene,
-            SnakeOrientation::Up,
+            ColliderVariant::SnakeBody,
+            old_head_pos,
         );
+        scene.snake_body_parts.push(old_head_pos);
     }
 
-    commands.entity(snake_head_id).insert(snake_head);
-    commands.entity(apple_id).insert(apple);
+    commands
+        .entity(snake_head_id)
+        .insert(SnakeHeadMarker::create_bundle(
+            &assets,
+            &scene.snake_head.ge.pos,
+        ));
+    commands
+        .entity(apple_id)
+        .insert(AppleMarker::create_bundle(&assets, &scene.apple.ge.pos));
     commands
         .entity(scene_id)
         .insert(SceneBundle {

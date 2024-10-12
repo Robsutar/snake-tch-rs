@@ -5,18 +5,20 @@ mod utils;
 
 use bevy::{prelude::*, sprite::Mesh2dHandle};
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
-use game::{Apple, ColliderVariant, GridPos, Scene, SnakeHeadBundle, SnakeOrientation};
+use game::{AppleMarker, ColliderMarker, Scene, SnakeHead, SnakeHeadMarker, SnakeOrientation};
 use tch::Device;
 
 pub const RECT_SIZE: f32 = 25.0;
 pub const DEVICE: Device = Device::Cpu;
 
+pub type MaterialMesh = (Mesh2dHandle, Handle<ColorMaterial>);
+
 #[derive(Resource)]
 pub struct GlobalAssets {
-    apple_mesh_material: (Mesh2dHandle, Handle<ColorMaterial>),
-    wall_mesh_material: (Mesh2dHandle, Handle<ColorMaterial>),
-    snake_body_mesh_material: (Mesh2dHandle, Handle<ColorMaterial>),
-    snake_head_mesh_material: (Mesh2dHandle, Handle<ColorMaterial>),
+    apple_mesh_material: MaterialMesh,
+    wall_mesh_material: MaterialMesh,
+    snake_body_mesh_material: MaterialMesh,
+    snake_head_mesh_material: MaterialMesh,
     arena: IRect,
 }
 
@@ -67,17 +69,22 @@ fn update(
     assets: Res<GlobalAssets>,
     mut scene_query: Query<&mut Scene>,
     mut snake_head_query: Query<
-        (&mut SnakeOrientation, &mut GridPos, &mut Transform),
-        (Without<ColliderVariant>, Without<Apple>),
-    >,
-    mut apple_query: Query<
-        (&mut GridPos, &mut Transform),
+        &mut Transform,
         (
-            With<Apple>,
-            (Without<ColliderVariant>, Without<SnakeOrientation>),
+            With<SnakeHeadMarker>,
+            Without<AppleMarker>,
+            Without<ColliderMarker>,
         ),
     >,
-    mut collider_query: Query<&mut Transform, With<ColliderVariant>>,
+    mut apple_query: Query<
+        &mut Transform,
+        (
+            With<AppleMarker>,
+            Without<SnakeHeadMarker>,
+            Without<ColliderMarker>,
+        ),
+    >,
+    mut collider_query: Query<&mut Transform, With<ColliderMarker>>,
 ) {
     egui::Window::new("Hello").show(contexts.ctx_mut(), |ui| {
         ui.label("world");
@@ -85,16 +92,12 @@ fn update(
 
     if let Some(pressed_orientation) = SnakeOrientation::pressed(&keyboard_input) {
         let mut scene = scene_query.single_mut();
-        let (mut snake_orientation, mut snake_pos, mut snake_transform) =
-            snake_head_query.get_mut(scene.snake_head).unwrap();
-        let (mut apple_pos, mut apple_transform) = apple_query.get_mut(scene.apple).unwrap();
+        let mut snake_transform = snake_head_query.get_mut(scene.snake_head.ge.id).unwrap();
+        let mut apple_transform = apple_query.get_mut(scene.apple.ge.id).unwrap();
 
-        if pressed_orientation.opposite() != *snake_orientation {
-            SnakeHeadBundle::move_to(
-                &mut snake_orientation,
-                &mut snake_pos,
+        if pressed_orientation.opposite() != scene.snake_head.orientation {
+            SnakeHead::move_to(
                 &mut snake_transform,
-                &mut apple_pos,
                 &mut apple_transform,
                 &mut commands,
                 &assets,
