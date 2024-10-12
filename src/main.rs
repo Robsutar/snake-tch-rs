@@ -1,5 +1,6 @@
 mod agent;
 mod game;
+mod model;
 
 use bevy::{prelude::*, sprite::Mesh2dHandle};
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
