@@ -244,7 +244,7 @@ impl ColliderMarker {
 }
 
 struct Collider {
-    variant: ColliderVariant,
+    _variant: ColliderVariant,
     pub ge: GridEntity,
 }
 
@@ -282,7 +282,7 @@ impl Scene {
         if let Some(replaced) = self.colliders.insert(
             pos,
             Collider {
-                variant,
+                _variant: variant,
                 ge: GridEntity::new(collider_id, pos),
             },
         ) {
@@ -338,7 +338,7 @@ impl Scene {
     }
 }
 
-pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
+pub fn init_scene(commands: &mut Commands, assets: &Res<GlobalAssets>) -> Entity {
     let mut rng = thread_rng();
 
     let snake_head_id = commands.spawn_empty().id();
@@ -377,24 +377,14 @@ pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
         walls.push((assets.arena.max.x + 1, y));
     }
     for (x, y) in walls {
-        scene.push_collider(
-            &mut commands,
-            &assets,
-            ColliderVariant::Wall,
-            GridPos::new(x, y),
-        );
+        scene.push_collider(commands, &assets, ColliderVariant::Wall, GridPos::new(x, y));
     }
 
     for _ in 0..3 {
         let snake_head = &mut scene.snake_head;
         let new_head_pos = snake_head.orientation.next(&snake_head.ge.pos);
         let old_head_pos = std::mem::replace(&mut snake_head.ge.pos, new_head_pos);
-        scene.push_collider(
-            &mut commands,
-            &assets,
-            ColliderVariant::SnakeBody,
-            old_head_pos,
-        );
+        scene.push_collider(commands, &assets, ColliderVariant::SnakeBody, old_head_pos);
         scene.snake_body_parts.push(old_head_pos);
     }
 
@@ -419,4 +409,6 @@ pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {
         })
         .add_child(snake_head_id)
         .add_child(apple_id);
+
+    scene_id
 }

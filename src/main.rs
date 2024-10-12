@@ -4,8 +4,9 @@ mod model;
 mod utils;
 
 use bevy::{prelude::*, sprite::Mesh2dHandle};
-use bevy_egui::{egui, EguiContexts, EguiPlugin};
-use game::{AppleMarker, ColliderMarker, Scene, SnakeHead, SnakeHeadMarker, SnakeOrientation};
+use game::{
+    init_scene, AppleMarker, ColliderMarker, Scene, SnakeHead, SnakeHeadMarker, SnakeOrientation,
+};
 use tch::Device;
 
 pub const RECT_SIZE: f32 = 25.0;
@@ -22,16 +23,18 @@ pub struct GlobalAssets {
     arena: IRect,
 }
 
+#[derive(Component)]
+struct HumanController;
+
 fn main() {
     App::default()
         .add_plugins(DefaultPlugins)
-        .add_plugins(EguiPlugin)
-        .add_systems(Startup, (init, game::init_scene).chain())
-        .add_systems(Update, update)
+        .add_systems(Startup, (init_assets, init).chain())
+        .add_systems(Update, human_update)
         .run();
 }
 
-fn init(
+fn init_assets(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -58,16 +61,20 @@ fn init(
         ),
         arena: IRect::new(-arena_len, -arena_len, arena_len, arena_len),
     });
-
-    commands.spawn(Camera2dBundle::default());
 }
 
-fn update(
-    mut contexts: EguiContexts,
+fn init(mut commands: Commands, assets: Res<GlobalAssets>) {
+    commands.spawn(Camera2dBundle::default());
+
+    let human_scene_id = init_scene(&mut commands, &assets);
+    commands.entity(human_scene_id).insert(HumanController);
+}
+
+fn human_update(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
     assets: Res<GlobalAssets>,
-    mut scene_query: Query<&mut Scene>,
+    mut scene_query: Query<&mut Scene, With<HumanController>>,
     mut snake_head_query: Query<
         &mut Transform,
         (
@@ -86,10 +93,6 @@ fn update(
     >,
     mut collider_query: Query<&mut Transform, With<ColliderMarker>>,
 ) {
-    egui::Window::new("Hello").show(contexts.ctx_mut(), |ui| {
-        ui.label("world");
-    });
-
     if let Some(pressed_orientation) = SnakeOrientation::pressed(&keyboard_input) {
         let mut scene = scene_query.single_mut();
         let mut snake_head_transform = snake_head_query.get_mut(scene.snake_head.ge.id).unwrap();
