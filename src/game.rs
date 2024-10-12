@@ -73,20 +73,6 @@ impl SnakeOrientation {
         }
     }
 
-    pub fn pressed(keyboard_input: &Res<ButtonInput<KeyCode>>) -> Option<Self> {
-        if keyboard_input.just_pressed(KeyCode::ArrowUp) {
-            Some(Self::Up)
-        } else if keyboard_input.just_pressed(KeyCode::ArrowDown) {
-            Some(Self::Down)
-        } else if keyboard_input.just_pressed(KeyCode::ArrowLeft) {
-            Some(Self::Left)
-        } else if keyboard_input.just_pressed(KeyCode::ArrowRight) {
-            Some(Self::Right)
-        } else {
-            None
-        }
-    }
-
     pub fn opposite(&self) -> Self {
         match self {
             Self::Up => Self::Down,

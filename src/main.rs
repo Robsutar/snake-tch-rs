@@ -24,12 +24,35 @@ pub struct GlobalAssets {
 }
 
 #[derive(Component)]
-struct HumanController;
+struct HumanController {
+    up_command: KeyCode,
+    down_command: KeyCode,
+    left_command: KeyCode,
+    right_command: KeyCode,
+}
+impl HumanController {
+    pub fn orientation_pressed(
+        &self,
+        keyboard_input: &Res<ButtonInput<KeyCode>>,
+    ) -> Option<SnakeOrientation> {
+        if keyboard_input.just_pressed(self.up_command) {
+            Some(SnakeOrientation::Up)
+        } else if keyboard_input.just_pressed(self.down_command) {
+            Some(SnakeOrientation::Down)
+        } else if keyboard_input.just_pressed(self.left_command) {
+            Some(SnakeOrientation::Left)
+        } else if keyboard_input.just_pressed(self.right_command) {
+            Some(SnakeOrientation::Right)
+        } else {
+            None
+        }
+    }
+}
 
 fn main() {
     App::default()
         .add_plugins(DefaultPlugins)
-        .add_systems(Startup, (init_assets, init).chain())
+        .add_systems(Startup, (init_assets, init_human).chain())
         .add_systems(Update, human_update)
         .run();
 }
@@ -63,18 +86,23 @@ fn init_assets(
     });
 }
 
-fn init(mut commands: Commands, assets: Res<GlobalAssets>) {
+fn init_human(mut commands: Commands, assets: Res<GlobalAssets>) {
     commands.spawn(Camera2dBundle::default());
 
-    let human_scene_id = init_scene(&mut commands, &assets);
-    commands.entity(human_scene_id).insert(HumanController);
+    let scene_id = init_scene(&mut commands, &assets);
+    commands.entity(scene_id).insert(HumanController {
+        up_command: KeyCode::ArrowUp,
+        down_command: KeyCode::ArrowDown,
+        left_command: KeyCode::ArrowLeft,
+        right_command: KeyCode::ArrowRight,
+    });
 }
 
 fn human_update(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
     assets: Res<GlobalAssets>,
-    mut scene_query: Query<&mut Scene, With<HumanController>>,
+    mut scene_query: Query<(&mut Scene, &HumanController)>,
     mut snake_head_query: Query<
         &mut Transform,
         (
@@ -93,8 +121,8 @@ fn human_update(
     >,
     mut collider_query: Query<&mut Transform, With<ColliderMarker>>,
 ) {
-    if let Some(pressed_orientation) = SnakeOrientation::pressed(&keyboard_input) {
-        let mut scene = scene_query.single_mut();
+    let (mut scene, controller) = scene_query.single_mut();
+    if let Some(pressed_orientation) = controller.orientation_pressed(&keyboard_input) {
         let mut snake_head_transform = snake_head_query.get_mut(scene.snake_head.ge.id).unwrap();
         let mut apple_transform = apple_query.get_mut(scene.apple.ge.id).unwrap();
 
