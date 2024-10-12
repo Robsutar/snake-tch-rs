@@ -294,6 +294,48 @@ impl Scene {
     pub fn is_collision(&self, pos: &GridPos) -> bool {
         self.colliders.contains_key(pos)
     }
+
+    pub fn reset(
+        &mut self,
+        commands: &mut Commands,
+        assets: &GlobalAssets,
+        snake_head_transform: &mut Transform,
+        apple_transform: &mut Transform,
+    ) {
+        let mut rng = thread_rng();
+
+        for body_pos in &self.snake_body_parts {
+            let body = self.colliders.remove(body_pos).unwrap();
+            commands.entity(body.ge.id).despawn();
+        }
+        self.snake_body_parts.clear();
+
+        self.snake_head.orientation = SnakeOrientation::Up;
+
+        self.snake_head.ge.pos = GridPos::new(0, 0);
+        for _ in 0..3 {
+            let snake_head = &mut self.snake_head;
+            let new_head_pos = snake_head.orientation.next(&snake_head.ge.pos);
+            let old_head_pos = std::mem::replace(&mut snake_head.ge.pos, new_head_pos);
+            self.push_collider(commands, &assets, ColliderVariant::SnakeBody, old_head_pos);
+            self.snake_body_parts.push(old_head_pos);
+        }
+
+        let snake_pos = self.snake_head.ge.pos;
+        GridEntity::apply_translation_to(
+            &mut self.snake_head.ge.pos,
+            snake_head_transform,
+            snake_pos,
+        );
+        GridEntity::apply_translation_to(
+            &mut self.apple.ge.pos,
+            apple_transform,
+            GridPos::new(
+                rng.gen_range(assets.arena.min.x..=assets.arena.max.x),
+                rng.gen_range(assets.arena.min.y..=assets.arena.max.y),
+            ),
+        );
+    }
 }
 
 pub fn init_scene(mut commands: Commands, assets: Res<GlobalAssets>) {

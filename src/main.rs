@@ -92,12 +92,12 @@ fn update(
 
     if let Some(pressed_orientation) = SnakeOrientation::pressed(&keyboard_input) {
         let mut scene = scene_query.single_mut();
-        let mut snake_transform = snake_head_query.get_mut(scene.snake_head.ge.id).unwrap();
+        let mut snake_head_transform = snake_head_query.get_mut(scene.snake_head.ge.id).unwrap();
         let mut apple_transform = apple_query.get_mut(scene.apple.ge.id).unwrap();
 
         if pressed_orientation.opposite() != scene.snake_head.orientation {
-            SnakeHead::move_to(
-                &mut snake_transform,
+            if SnakeHead::move_to(
+                &mut snake_head_transform,
                 &mut apple_transform,
                 &mut commands,
                 &assets,
@@ -105,7 +105,15 @@ fn update(
                 &mut scene,
                 pressed_orientation,
             )
-            .expect("Collided");
+            .is_err()
+            {
+                scene.reset(
+                    &mut commands,
+                    &assets,
+                    &mut snake_head_transform,
+                    &mut apple_transform,
+                );
+            }
         }
     }
 }
