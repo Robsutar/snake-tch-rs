@@ -56,7 +56,7 @@ impl GridEntity {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum SnakeOrientation {
     Up,
     Down,
@@ -82,21 +82,33 @@ impl SnakeOrientation {
         }
     }
 
-    pub fn left(&self) -> Self {
+    pub fn apply_to_action(&self, applied_orientation: &Self) -> Option<PlayerStepAction> {
+        // Most elegant approach? No, but it's the fastest.
         match self {
-            Self::Up => Self::Left,
-            Self::Down => Self::Right,
-            Self::Left => Self::Down,
-            Self::Right => Self::Up,
-        }
-    }
-
-    pub fn right(&self) -> Self {
-        match self {
-            Self::Up => Self::Right,
-            Self::Down => Self::Left,
-            Self::Left => Self::Up,
-            Self::Right => Self::Down,
+            Self::Up => match applied_orientation {
+                Self::Up => Some(PlayerStepAction::Forward),
+                Self::Down => None,
+                Self::Left => Some(PlayerStepAction::Left),
+                Self::Right => Some(PlayerStepAction::Right),
+            },
+            Self::Down => match applied_orientation {
+                Self::Up => None,
+                Self::Down => Some(PlayerStepAction::Forward),
+                Self::Left => Some(PlayerStepAction::Right),
+                Self::Right => Some(PlayerStepAction::Left),
+            },
+            Self::Left => match applied_orientation {
+                Self::Up => Some(PlayerStepAction::Right),
+                Self::Down => Some(PlayerStepAction::Left),
+                Self::Left => Some(PlayerStepAction::Forward),
+                Self::Right => None,
+            },
+            Self::Right => match applied_orientation {
+                Self::Up => Some(PlayerStepAction::Left),
+                Self::Down => Some(PlayerStepAction::Right),
+                Self::Left => None,
+                Self::Right => Some(PlayerStepAction::Forward),
+            },
         }
     }
 }
@@ -118,55 +130,6 @@ pub struct SnakeHead {
 }
 
 impl SnakeHead {
-    pub fn move_to(
-        self_transform: &mut Transform,
-        apple_transform: &mut Transform,
-        commands: &mut Commands,
-        assets: &GlobalAssets,
-        collider_query: &mut Query<&mut Transform, With<ColliderMarker>>,
-        scene: &mut Scene,
-        orientation: SnakeOrientation,
-    ) -> Result<(), GridPos> {
-        let new_head_pos = orientation.next(&scene.snake_head.ge.pos);
-        if scene.colliders.contains_key(&new_head_pos) {
-            return Err(new_head_pos);
-        } else if scene.apple.ge.pos == new_head_pos {
-            Self::increase_to_unchecked(self_transform, commands, assets, scene, orientation);
-
-            let apple_pos = &mut scene.apple.ge.pos;
-
-            let mut rng = thread_rng();
-
-            let mut new_apple_pos = *apple_pos;
-            while scene.colliders.contains_key(&new_apple_pos) || new_apple_pos == new_head_pos {
-                new_apple_pos = GridPos::new(
-                    rng.gen_range(assets.arena.min.x..=assets.arena.max.x),
-                    rng.gen_range(assets.arena.min.y..=assets.arena.max.y),
-                );
-            }
-            GridEntity::apply_translation_to(apple_pos, apple_transform, new_apple_pos);
-            Ok(())
-        } else {
-            let self_pos = &mut scene.snake_head.ge.pos;
-            scene.snake_head.orientation = orientation;
-
-            let old_head_pos =
-                GridEntity::apply_translation_to(self_pos, self_transform, new_head_pos);
-
-            let last_body_part_id = scene
-                .colliders
-                .remove(&scene.snake_body_parts.remove(0))
-                .unwrap();
-            let mut last_body_part = collider_query.get_mut(last_body_part_id.ge.id).unwrap();
-
-            last_body_part.translation = old_head_pos.as_rect_translation();
-
-            scene.colliders.insert(old_head_pos, last_body_part_id);
-            scene.snake_body_parts.push(old_head_pos);
-            Ok(())
-        }
-    }
-
     fn increase_to_unchecked(
         self_transform: &mut Transform,
         commands: &mut Commands,
@@ -234,6 +197,38 @@ struct Collider {
     pub ge: GridEntity,
 }
 
+pub enum PlayerStepAction {
+    Forward,
+    Left,
+    Right,
+}
+impl PlayerStepAction {
+    fn rotate(&self, orientation: &SnakeOrientation) -> SnakeOrientation {
+        // Most elegant approach? No, but it's the fastest.
+        match self {
+            PlayerStepAction::Forward => *orientation,
+            PlayerStepAction::Left => match orientation {
+                SnakeOrientation::Up => SnakeOrientation::Left,
+                SnakeOrientation::Down => SnakeOrientation::Right,
+                SnakeOrientation::Left => SnakeOrientation::Down,
+                SnakeOrientation::Right => SnakeOrientation::Up,
+            },
+            PlayerStepAction::Right => match orientation {
+                SnakeOrientation::Up => SnakeOrientation::Right,
+                SnakeOrientation::Down => SnakeOrientation::Left,
+                SnakeOrientation::Left => SnakeOrientation::Up,
+                SnakeOrientation::Right => SnakeOrientation::Down,
+            },
+        }
+    }
+}
+
+pub enum PlayerStepResult {
+    Nothing,
+    AppleEaten,
+    Collision,
+}
+
 #[derive(Component)]
 pub struct Scene {
     self_entity: Entity,
@@ -241,19 +236,9 @@ pub struct Scene {
     snake_body_parts: Vec<GridPos>,
     pub apple: Apple,
     colliders: HashMap<GridPos, Collider>,
+    pub frame_iteration: usize,
+    pub punctuation: usize,
 }
-
-#[derive(Bundle)]
-struct SceneBundle {
-    scene: Scene,
-
-    transform: Transform,
-    global_transform: GlobalTransform,
-    visibility: Visibility,
-    inherited_visibility: InheritedVisibility,
-    view_visibility: ViewVisibility,
-}
-
 impl Scene {
     fn push_collider(
         &mut self,
@@ -275,6 +260,61 @@ impl Scene {
             panic!("Collider override. Replaced: {:?}", replaced.ge.pos)
         }
         commands.entity(self.self_entity).add_child(collider_id);
+    }
+
+    pub fn play_step(
+        &mut self,
+        commands: &mut Commands,
+        assets: &GlobalAssets,
+        collider_query: &mut Query<&mut Transform, With<ColliderMarker>>,
+        snake_transform: &mut Transform,
+        apple_transform: &mut Transform,
+        action: PlayerStepAction,
+    ) -> PlayerStepResult {
+        let orientation = action.rotate(&self.snake_head.orientation);
+        let new_head_pos = orientation.next(&self.snake_head.ge.pos);
+        if self.colliders.contains_key(&new_head_pos) {
+            PlayerStepResult::Collision
+        } else if self.apple.ge.pos == new_head_pos {
+            SnakeHead::increase_to_unchecked(snake_transform, commands, assets, self, orientation);
+
+            let apple_pos = &mut self.apple.ge.pos;
+
+            let mut rng = thread_rng();
+
+            let mut new_apple_pos = *apple_pos;
+            while self.colliders.contains_key(&new_apple_pos) || new_apple_pos == new_head_pos {
+                new_apple_pos = GridPos::new(
+                    rng.gen_range(assets.arena.min.x..=assets.arena.max.x),
+                    rng.gen_range(assets.arena.min.y..=assets.arena.max.y),
+                );
+            }
+            GridEntity::apply_translation_to(apple_pos, apple_transform, new_apple_pos);
+
+            self.punctuation += 1;
+            self.frame_iteration += 1;
+            PlayerStepResult::AppleEaten
+        } else {
+            let self_pos = &mut self.snake_head.ge.pos;
+            self.snake_head.orientation = orientation;
+
+            let old_head_pos =
+                GridEntity::apply_translation_to(self_pos, snake_transform, new_head_pos);
+
+            let last_body_part_id = self
+                .colliders
+                .remove(&self.snake_body_parts.remove(0))
+                .unwrap();
+            let mut last_body_part = collider_query.get_mut(last_body_part_id.ge.id).unwrap();
+
+            last_body_part.translation = old_head_pos.as_rect_translation();
+
+            self.colliders.insert(old_head_pos, last_body_part_id);
+            self.snake_body_parts.push(old_head_pos);
+
+            self.frame_iteration += 1;
+            PlayerStepResult::Nothing
+        }
     }
 
     pub fn is_collision(&self, pos: &GridPos) -> bool {
@@ -324,6 +364,17 @@ impl Scene {
     }
 }
 
+#[derive(Bundle)]
+struct SceneBundle {
+    scene: Scene,
+
+    transform: Transform,
+    global_transform: GlobalTransform,
+    visibility: Visibility,
+    inherited_visibility: InheritedVisibility,
+    view_visibility: ViewVisibility,
+}
+
 pub fn init_scene(commands: &mut Commands, assets: &Res<GlobalAssets>) -> Entity {
     let mut rng = thread_rng();
 
@@ -351,6 +402,8 @@ pub fn init_scene(commands: &mut Commands, assets: &Res<GlobalAssets>) -> Entity
         apple,
         snake_body_parts: Vec::new(),
         colliders: HashMap::new(),
+        frame_iteration: 0,
+        punctuation: 0,
     };
 
     let mut walls = Vec::new();

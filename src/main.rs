@@ -126,24 +126,32 @@ fn human_update(
         let mut snake_head_transform = snake_head_query.get_mut(scene.snake_head.ge.id).unwrap();
         let mut apple_transform = apple_query.get_mut(scene.apple.ge.id).unwrap();
 
-        if pressed_orientation.opposite() != scene.snake_head.orientation {
-            if SnakeHead::move_to(
-                &mut snake_head_transform,
-                &mut apple_transform,
+        if let Some(action) = scene
+            .snake_head
+            .orientation
+            .apply_to_action(&pressed_orientation)
+        {
+            match scene.play_step(
                 &mut commands,
                 &assets,
                 &mut collider_query,
-                &mut scene,
-                pressed_orientation,
-            )
-            .is_err()
-            {
+                &mut snake_head_transform,
+                &mut apple_transform,
+                action,
+            ) {
+                PlayerStepResult::Nothing => {}
+                PlayerStepResult::AppleEaten => {
+                    println!("Apple eaten! Punctuation: {:?}", scene.punctuation)
+                }
+                PlayerStepResult::Collision => {
+                    println!("Collision! Game reset");
                 scene.reset(
                     &mut commands,
                     &assets,
                     &mut snake_head_transform,
                     &mut apple_transform,
                 );
+                }
             }
         }
     }
