@@ -50,3 +50,22 @@ impl SnapshotConcat {
     }
 }
 
+#[derive(Debug)]
+pub struct LinerQNet {
+    fc1: Linear,
+    fc2: Linear,
+}
+impl LinerQNet {
+    pub fn new(vs: &VarStore, input_size: i64, hidden_size: i64, output_size: i64) -> Self {
+        let fc1 = nn::linear(&vs.root(), input_size, hidden_size, Default::default());
+        let fc2 = nn::linear(&vs.root(), hidden_size, output_size, Default::default());
+
+        Self { fc1, fc2 }
+    }
+}
+impl Module for LinerQNet {
+    fn forward(&self, xs: &Tensor) -> Tensor {
+        xs.apply(&self.fc1).relu().apply(&self.fc2)
+    }
+}
+
