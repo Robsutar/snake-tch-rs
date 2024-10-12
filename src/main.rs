@@ -1,12 +1,15 @@
 mod agent;
 mod game;
 mod model;
+mod utils;
 
 use bevy::{prelude::*, sprite::Mesh2dHandle};
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use game::{Apple, ColliderVariant, GridPos, Scene, SnakeHeadBundle, SnakeOrientation};
+use tch::Device;
 
 pub const RECT_SIZE: f32 = 25.0;
+pub const DEVICE: Device = Device::Cpu;
 
 #[derive(Resource)]
 pub struct GlobalAssets {
