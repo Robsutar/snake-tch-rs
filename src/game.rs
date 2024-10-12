@@ -129,26 +129,6 @@ pub struct SnakeHead {
     pub ge: GridEntity,
 }
 
-impl SnakeHead {
-    fn increase_to_unchecked(
-        self_transform: &mut Transform,
-        commands: &mut Commands,
-        assets: &GlobalAssets,
-        scene: &mut Scene,
-        orientation: SnakeOrientation,
-    ) {
-        let new_head_pos = orientation.next(&scene.snake_head.ge.pos);
-        scene.snake_head.orientation = orientation;
-        let old_head_pos = GridEntity::apply_translation_to(
-            &mut scene.snake_head.ge.pos,
-            self_transform,
-            new_head_pos,
-        );
-        scene.push_collider(commands, &assets, ColliderVariant::SnakeBody, old_head_pos);
-        scene.snake_body_parts.push(old_head_pos);
-    }
-}
-
 #[derive(Component)]
 pub struct AppleMarker;
 impl AppleMarker {
@@ -262,6 +242,14 @@ impl Scene {
         commands.entity(self.self_entity).add_child(collider_id);
     }
 
+    pub fn snake_len(&self) -> usize {
+        self.snake_body_parts.len() + 1
+    }
+
+    pub fn is_collision(&self, pos: &GridPos) -> bool {
+        self.colliders.contains_key(pos)
+    }
+
     pub fn play_step(
         &mut self,
         commands: &mut Commands,
@@ -276,7 +264,14 @@ impl Scene {
         if self.colliders.contains_key(&new_head_pos) {
             PlayerStepResult::Collision
         } else if self.apple.ge.pos == new_head_pos {
-            SnakeHead::increase_to_unchecked(snake_transform, commands, assets, self, orientation);
+            self.snake_head.orientation = orientation;
+            let old_head_pos = GridEntity::apply_translation_to(
+                &mut self.snake_head.ge.pos,
+                snake_transform,
+                new_head_pos,
+            );
+            self.push_collider(commands, &assets, ColliderVariant::SnakeBody, old_head_pos);
+            self.snake_body_parts.push(old_head_pos);
 
             let apple_pos = &mut self.apple.ge.pos;
 
@@ -317,10 +312,6 @@ impl Scene {
         }
     }
 
-    pub fn is_collision(&self, pos: &GridPos) -> bool {
-        self.colliders.contains_key(pos)
-    }
-
     pub fn reset(
         &mut self,
         commands: &mut Commands,
@@ -339,7 +330,7 @@ impl Scene {
         self.snake_head.orientation = SnakeOrientation::Up;
 
         self.snake_head.ge.pos = GridPos::new(0, 0);
-        for _ in 0..3 {
+        for _ in 0..2 {
             let snake_head = &mut self.snake_head;
             let new_head_pos = snake_head.orientation.next(&snake_head.ge.pos);
             let old_head_pos = std::mem::replace(&mut snake_head.ge.pos, new_head_pos);
@@ -361,6 +352,9 @@ impl Scene {
                 rng.gen_range(assets.arena.min.y..=assets.arena.max.y),
             ),
         );
+
+        self.frame_iteration = 0;
+        self.punctuation = 0;
     }
 }
 
@@ -419,7 +413,7 @@ pub fn init_scene(commands: &mut Commands, assets: &Res<GlobalAssets>) -> Entity
         scene.push_collider(commands, &assets, ColliderVariant::Wall, GridPos::new(x, y));
     }
 
-    for _ in 0..3 {
+    for _ in 0..2 {
         let snake_head = &mut scene.snake_head;
         let new_head_pos = snake_head.orientation.next(&snake_head.ge.pos);
         let old_head_pos = std::mem::replace(&mut snake_head.ge.pos, new_head_pos);

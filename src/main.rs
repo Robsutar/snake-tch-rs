@@ -9,7 +9,7 @@ use game::{
 };
 use tch::Device;
 
-pub const RECT_SIZE: f32 = 25.0;
+pub const RECT_SIZE: f32 = 10.0;
 pub const DEVICE: Device = Device::Cpu;
 
 pub type MaterialMesh = (Mesh2dHandle, Handle<ColorMaterial>);
@@ -64,7 +64,7 @@ fn init_assets(
 ) {
     let generic_rect = Rectangle::new(RECT_SIZE * 0.8, RECT_SIZE * 0.8);
 
-    let arena_len = 10;
+    let arena_len = 20;
     commands.insert_resource(GlobalAssets {
         apple_mesh_material: (
             Mesh2dHandle(meshes.add(generic_rect)),
