@@ -84,13 +84,20 @@ impl AiController {
 }
 
 fn main() {
-    App::default()
-        .add_plugins(DefaultPlugins)
-        .add_plugins(EguiPlugin)
-        .add_systems(Startup, (init_assets, init_ai).chain())
-        .add_systems(Update, ai_update)
-        .add_systems(Update, ui_info_update)
-        .run();
+    let use_human_controller = false;
+
+    let mut app = App::default();
+    app.add_plugins(DefaultPlugins);
+    app.add_plugins(EguiPlugin);
+    app.add_systems(Update, ui_info_update);
+    if use_human_controller {
+        app.add_systems(Startup, (init_assets, init_human).chain());
+        app.add_systems(Update, human_update);
+    } else {
+        app.add_systems(Startup, (init_assets, init_ai).chain());
+        app.add_systems(Update, ai_update);
+    }
+    app.run();
 }
 
 fn init_assets(
