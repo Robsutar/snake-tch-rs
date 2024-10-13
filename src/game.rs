@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{MaterialMesh, RECT_SIZE};
+use crate::{MaterialMesh, ARENA, RECT_SIZE};
 
 use super::GlobalAssets;
 use bevy::{
@@ -280,8 +280,8 @@ impl Scene {
             let mut new_apple_pos = *apple_pos;
             while self.colliders.contains_key(&new_apple_pos) || new_apple_pos == new_head_pos {
                 new_apple_pos = GridPos::new(
-                    rng.gen_range(assets.arena.min.x..=assets.arena.max.x),
-                    rng.gen_range(assets.arena.min.y..=assets.arena.max.y),
+                    rng.gen_range(ARENA.min.x..=ARENA.max.x),
+                    rng.gen_range(ARENA.min.y..=ARENA.max.y),
                 );
             }
             GridEntity::apply_translation_to(apple_pos, apple_transform, new_apple_pos);
@@ -348,8 +348,8 @@ impl Scene {
             &mut self.apple.ge.pos,
             apple_transform,
             GridPos::new(
-                rng.gen_range(assets.arena.min.x..=assets.arena.max.x),
-                rng.gen_range(assets.arena.min.y..=assets.arena.max.y),
+                rng.gen_range(ARENA.min.x..=ARENA.max.x),
+                rng.gen_range(ARENA.min.y..=ARENA.max.y),
             ),
         );
 
@@ -383,8 +383,8 @@ pub fn init_scene(commands: &mut Commands, assets: &Res<GlobalAssets>) -> Entity
         ge: GridEntity::new(
             apple_id,
             GridPos::new(
-                rng.gen_range(assets.arena.min.x..=assets.arena.max.x),
-                rng.gen_range(assets.arena.min.y..=assets.arena.max.y),
+                rng.gen_range(ARENA.min.x..=ARENA.max.x),
+                rng.gen_range(ARENA.min.y..=ARENA.max.y),
             ),
         ),
     };
@@ -401,13 +401,13 @@ pub fn init_scene(commands: &mut Commands, assets: &Res<GlobalAssets>) -> Entity
     };
 
     let mut walls = Vec::new();
-    for x in assets.arena.min.x - 1..=assets.arena.max.x + 1 {
-        walls.push((x, assets.arena.min.y - 1));
-        walls.push((x, assets.arena.max.y + 1));
+    for x in ARENA.min.x - 1..=ARENA.max.x + 1 {
+        walls.push((x, ARENA.min.y - 1));
+        walls.push((x, ARENA.max.y + 1));
     }
-    for y in (assets.arena.min.y - 1 + 1)..assets.arena.max.y + 1 {
-        walls.push((assets.arena.min.x - 1, y));
-        walls.push((assets.arena.max.x + 1, y));
+    for y in (ARENA.min.y - 1 + 1)..ARENA.max.y + 1 {
+        walls.push((ARENA.min.x - 1, y));
+        walls.push((ARENA.max.x + 1, y));
     }
     for (x, y) in walls {
         scene.push_collider(commands, &assets, ColliderVariant::Wall, GridPos::new(x, y));

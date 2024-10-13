@@ -11,6 +11,10 @@ use tch::Device;
 
 pub const RECT_SIZE: f32 = 10.0;
 pub const DEVICE: Device = Device::Cpu;
+pub const ARENA: IRect = IRect {
+    min: IVec2 { x: -20, y: -20 },
+    max: IVec2 { x: 20, y: 20 },
+};
 
 pub type MaterialMesh = (Mesh2dHandle, Handle<ColorMaterial>);
 
@@ -64,7 +68,6 @@ fn init_assets(
 ) {
     let generic_rect = Rectangle::new(RECT_SIZE * 0.8, RECT_SIZE * 0.8);
 
-    let arena_len = 20;
     commands.insert_resource(GlobalAssets {
         apple_mesh_material: (
             Mesh2dHandle(meshes.add(generic_rect)),
@@ -82,8 +85,10 @@ fn init_assets(
             Mesh2dHandle(meshes.add(generic_rect)),
             materials.add(Color::srgb(0.0, 1.0, 0.0)),
         ),
-        arena: IRect::new(-arena_len, -arena_len, arena_len, arena_len),
     });
+}
+
+}
 }
 
 fn init_human(mut commands: Commands, assets: Res<GlobalAssets>) {
