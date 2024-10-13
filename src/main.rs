@@ -4,6 +4,10 @@ mod model;
 mod utils;
 
 use bevy::{prelude::*, sprite::Mesh2dHandle};
+use bevy_egui::{
+    egui::{self, Id},
+    EguiContexts, EguiPlugin,
+};
 use game::{
     init_scene, AppleMarker, ColliderMarker, Scene, SnakeHead, SnakeHeadMarker, SnakeOrientation,
 };
@@ -24,7 +28,6 @@ pub struct GlobalAssets {
     wall_mesh_material: MaterialMesh,
     snake_body_mesh_material: MaterialMesh,
     snake_head_mesh_material: MaterialMesh,
-    arena: IRect,
 }
 
 #[derive(Component)]
@@ -56,8 +59,8 @@ impl HumanController {
 fn main() {
     App::default()
         .add_plugins(DefaultPlugins)
-        .add_systems(Startup, (init_assets, init_human).chain())
-        .add_systems(Update, human_update)
+        .add_plugins(EguiPlugin)
+        .add_systems(Update, ui_info_update)
         .run();
 }
 
@@ -88,6 +91,33 @@ fn init_assets(
     });
 }
 
+fn ui_info_update(
+    mut ctx: EguiContexts,
+    camera_query: Query<(&Camera, &GlobalTransform)>,
+    scene_query: Query<(&Scene, &GlobalTransform)>,
+) {
+    let mut area_id: u64 = 1;
+    let (camera, camera_transform) = camera_query.single();
+    for (scene, scene_transform) in scene_query.iter() {
+        if let Some(point) =
+            camera.world_to_viewport(camera_transform, scene_transform.translation())
+        {
+            area_id += 1;
+            egui::Area::new(Id::new(area_id))
+                .fixed_pos([
+                    point.x + ARENA.min.x as f32 * RECT_SIZE,
+                    point.y + ARENA.min.y as f32 * RECT_SIZE,
+                ])
+                .show(ctx.ctx_mut(), |ui| {
+                    let frame = egui::Frame::none();
+
+                    frame.show(ui, |ui| {
+                        ui.set_min_width(200.0);
+                        ui.label(format!("Score: {}", scene.punctuation));
+                        ui.label(format!("Frame: {}", scene.frame_iteration));
+                    });
+                });
+        }
 }
 }
 
