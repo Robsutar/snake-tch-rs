@@ -19,7 +19,7 @@ use game::{
 use model::{Snapshot, ACTION_SIZE};
 use tch::Device;
 
-pub const RECT_SIZE: f32 = 10.0;
+pub const RECT_SIZE: f32 = 5.0;
 pub const DEVICE: Device = Device::Cpu;
 pub const ARENA: IRect = IRect {
     min: IVec2 { x: -20, y: -20 },
@@ -82,6 +82,9 @@ impl AiController {
         }
     }
 }
+
+#[derive(Component)]
+struct AiControllerDependent;
 
 fn main() {
     let use_human_controller = false;
@@ -160,7 +163,7 @@ fn ui_info_update(
 fn init_human(mut commands: Commands, assets: Res<GlobalAssets>) {
     commands.spawn(Camera2dBundle::default());
 
-    let scene_id = init_scene(&mut commands, &assets);
+    let scene_id = init_scene(&mut commands, &assets, Transform::default());
     commands.entity(scene_id).insert(HumanController {
         up_command: KeyCode::ArrowUp,
         down_command: KeyCode::ArrowDown,
@@ -231,21 +234,46 @@ fn human_update(
 fn init_ai(mut commands: Commands, assets: Res<GlobalAssets>) {
     commands.spawn(Camera2dBundle::default());
 
-    let scene_id = init_scene(&mut commands, &assets);
-    commands.entity(scene_id).insert(AiController {
+    commands.spawn(AiController {
         plot_scores: Vec::new(),
         plot_mean_scores: Vec::new(),
         total_score: 0,
         record: 0,
         agent: Mutex::new(Agent::load_if_exists("model.ot")),
     });
+
+    let margin = 1.1;
+    let x_count = 5;
+    let y_count = 3;
+
+    let mut x_index = -x_count as f32 / 2.0 - 0.5;
+    for _ in 0..x_count {
+        x_index += 1.0;
+
+        let mut y_index = -y_count as f32 / 2.0 - 0.5;
+        for _ in 0..y_count {
+            y_index += 1.0;
+
+            let scene_id = init_scene(
+                &mut commands,
+                &assets,
+                Transform::from_xyz(
+                    RECT_SIZE * ARENA.width() as f32 * x_index * margin,
+                    RECT_SIZE * ARENA.height() as f32 * y_index * margin,
+                    0.0,
+                ),
+            );
+            commands.entity(scene_id).insert(AiControllerDependent);
+        }
+    }
 }
 
 fn ai_update(
     mut commands: Commands,
     mut ctx: EguiContexts,
     assets: Res<GlobalAssets>,
-    mut scene_query: Query<(&mut Scene, &mut AiController)>,
+    mut controller_query: Query<&mut AiController>,
+    mut scene_query: Query<&mut Scene, With<AiControllerDependent>>,
     mut snake_head_query: Query<
         &mut Transform,
         (
@@ -264,12 +292,17 @@ fn ai_update(
     >,
     mut collider_query: Query<&mut Transform, With<ColliderMarker>>,
 ) {
-    if true {
-        let (mut scene, mut controller) = scene_query.single_mut();
+    let mut controller = controller_query.single_mut();
+    let mut agent = controller.agent.lock().unwrap();
+
+    let mut done_scores = Vec::new();
+    let mut best_score = 0;
+
+    let scene_query = scene_query.iter_mut();
+    let snapshots_stored = scene_query.len();
+    for mut scene in scene_query {
         let mut snake_head_transform = snake_head_query.get_mut(scene.snake_head.ge.id).unwrap();
         let mut apple_transform = apple_query.get_mut(scene.apple.ge.id).unwrap();
-
-        let mut agent = controller.agent.lock().unwrap();
 
         let state_old = Agent::get_state(&scene);
 
@@ -307,8 +340,6 @@ fn ai_update(
             done,
         };
 
-        agent.train_short_memory(&snapshot);
-
         agent.remember(snapshot);
 
         if done {
@@ -318,50 +349,63 @@ fn ai_update(
                 &mut snake_head_transform,
                 &mut apple_transform,
             );
-            agent.n_games += 1;
-            agent.train_long_memory();
 
-            let n_games = agent.n_games;
-            if score > controller.record {
-                agent.save("model.ot").unwrap();
-                drop(agent);
-                controller.record = score;
-            } else {
-                drop(agent);
+            done_scores.push(score);
+            if score > best_score {
+                best_score = score;
             }
-
-            controller.total_score += score;
-            let mean_score = controller.total_score as f64 / n_games as f64;
-
-            controller.plot_scores.push([n_games as f64, score as f64]);
-            controller
-                .plot_mean_scores
-                .push([n_games as f64, mean_score]);
         }
-
-        egui::CentralPanel::default()
-            .frame(egui::Frame::none())
-            .show(ctx.ctx_mut(), |ui| {
-                Plot::new("main_plot")
-                    .show_background(false)
-                    .show_grid(false)
-                    .allow_zoom(false)
-                    .allow_drag(false)
-                    .allow_scroll(false)
-                    .show_x(false)
-                    .show_y(false)
-                    .legend(Legend::default().position(egui_plot::Corner::LeftTop))
-                    .custom_x_axes(vec![AxisHints::new_x().label("Number of Games")])
-                    .show(ui, |plot_ui| {
-                        plot_ui.line(
-                            Line::new(PlotPoints::new(controller.plot_scores.clone()))
-                                .name("Scores"),
-                        );
-                        plot_ui.line(
-                            Line::new(PlotPoints::new(controller.plot_mean_scores.clone()))
-                                .name("Mean Scores"),
-                        );
-                    });
-            });
     }
+
+    agent.train_with_last(snapshots_stored);
+
+    let old_n_games = agent.n_games;
+    agent.n_games += done_scores.len();
+
+    if best_score != 0 {
+        agent.train_long_memory();
+
+        if best_score > controller.record {
+            agent.save("model.ot").unwrap();
+        }
+    }
+    drop(agent);
+
+    if best_score > controller.record {
+        controller.record = best_score;
+    }
+
+    for (i, score) in done_scores.into_iter().enumerate() {
+        let game_number = (old_n_games + i + 1) as f64;
+
+        controller.total_score += score;
+        let mean_score = controller.total_score as f64 / game_number;
+
+        controller.plot_scores.push([game_number, score as f64]);
+        controller.plot_mean_scores.push([game_number, mean_score]);
+    }
+
+    egui::CentralPanel::default()
+        .frame(egui::Frame::none())
+        .show(ctx.ctx_mut(), |ui| {
+            Plot::new("main_plot")
+                .show_background(false)
+                .show_grid(false)
+                .allow_zoom(false)
+                .allow_drag(false)
+                .allow_scroll(false)
+                .show_x(false)
+                .show_y(false)
+                .legend(Legend::default().position(egui_plot::Corner::LeftTop))
+                .custom_x_axes(vec![AxisHints::new_x().label("Number of Games")])
+                .show(ui, |plot_ui| {
+                    plot_ui.line(
+                        Line::new(PlotPoints::new(controller.plot_scores.clone())).name("Scores"),
+                    );
+                    plot_ui.line(
+                        Line::new(PlotPoints::new(controller.plot_mean_scores.clone()))
+                            .name("Mean Scores"),
+                    );
+                });
+        });
 }

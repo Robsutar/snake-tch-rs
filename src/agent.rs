@@ -138,8 +138,15 @@ impl Agent {
         self.trainer.train_multiple_steps(mini_sample);
     }
 
-    pub fn train_short_memory(&mut self, snapshot: &Snapshot) {
-        self.trainer.train_single_step(snapshot);
+    pub fn train_with_last(&mut self, count: usize) {
+        if self.memory.len() < count {
+            panic!("There are no enough examples.");
+        }
+        let mut mini_sample = SnapshotConcat::building(count);
+        for index in self.memory.len() - count..self.memory.len() {
+            mini_sample.push(&self.memory.as_deque()[index]);
+        }
+        self.trainer.train_multiple_steps(mini_sample);
     }
 
     pub fn get_action(&self, state: &[DType; STATE_SIZE]) -> [DType; ACTION_SIZE] {

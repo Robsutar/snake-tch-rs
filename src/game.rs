@@ -369,7 +369,11 @@ struct SceneBundle {
     view_visibility: ViewVisibility,
 }
 
-pub fn init_scene(commands: &mut Commands, assets: &Res<GlobalAssets>) -> Entity {
+pub fn init_scene(
+    commands: &mut Commands,
+    assets: &Res<GlobalAssets>,
+    transform: Transform,
+) -> Entity {
     let mut rng = thread_rng();
 
     let snake_head_id = commands.spawn_empty().id();
@@ -434,7 +438,7 @@ pub fn init_scene(commands: &mut Commands, assets: &Res<GlobalAssets>) -> Entity
         .entity(scene_id)
         .insert(SceneBundle {
             scene,
-            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+            transform,
             global_transform: Default::default(),
             visibility: Default::default(),
             inherited_visibility: Default::default(),
