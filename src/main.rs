@@ -11,6 +11,7 @@ use bevy_egui::{
     egui::{self, Id},
     EguiContexts, EguiPlugin,
 };
+use egui_plot::{AxisHints, Legend, Line, Plot, PlotPoints};
 use game::{
     init_scene, AppleMarker, ColliderMarker, PlayerStepAction, PlayerStepResult, Scene,
     SnakeHeadMarker, SnakeOrientation,
@@ -64,8 +65,8 @@ impl HumanController {
 
 #[derive(Component)]
 struct AiController {
-    plot_scores: Vec<usize>,
-    plot_mean_scores: Vec<f64>,
+    plot_scores: Vec<[f64; 2]>,
+    plot_mean_scores: Vec<[f64; 2]>,
     total_score: usize,
     record: usize,
     agent: Mutex<Agent>,
@@ -235,6 +236,7 @@ fn init_ai(mut commands: Commands, assets: Res<GlobalAssets>) {
 
 fn ai_update(
     mut commands: Commands,
+    mut ctx: EguiContexts,
     assets: Res<GlobalAssets>,
     mut scene_query: Query<(&mut Scene, &mut AiController)>,
     mut snake_head_query: Query<
@@ -321,15 +323,38 @@ fn ai_update(
                 drop(agent);
             }
 
-            println!(
-                "Game: {:?}, Score: {:?}, Record: {:?}",
-                n_games, score, controller.record
-            );
-
-            controller.plot_scores.push(score);
             controller.total_score += score;
             let mean_score = controller.total_score as f64 / n_games as f64;
-            controller.plot_mean_scores.push(mean_score);
+
+            controller.plot_scores.push([n_games as f64, score as f64]);
+            controller
+                .plot_mean_scores
+                .push([n_games as f64, mean_score]);
         }
+
+        egui::CentralPanel::default()
+            .frame(egui::Frame::none())
+            .show(ctx.ctx_mut(), |ui| {
+                Plot::new("main_plot")
+                    .show_background(false)
+                    .show_grid(false)
+                    .allow_zoom(false)
+                    .allow_drag(false)
+                    .allow_scroll(false)
+                    .show_x(false)
+                    .show_y(false)
+                    .legend(Legend::default().position(egui_plot::Corner::LeftTop))
+                    .custom_x_axes(vec![AxisHints::new_x().label("Number of Games")])
+                    .show(ui, |plot_ui| {
+                        plot_ui.line(
+                            Line::new(PlotPoints::new(controller.plot_scores.clone()))
+                                .name("Scores"),
+                        );
+                        plot_ui.line(
+                            Line::new(PlotPoints::new(controller.plot_mean_scores.clone()))
+                                .name("Mean Scores"),
+                        );
+                    });
+            });
     }
 }

@@ -15,5 +15,6 @@ bevy = { version = "0.14.2", default-features = false, features = [
     "x11",
 ] }
 bevy_egui = "0.30.0"
+egui_plot = "0.29.0"
 rand = "0.8.5"
 tch = "0.17.0"
